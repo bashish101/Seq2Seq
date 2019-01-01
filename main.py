@@ -10,11 +10,12 @@ from datagen import DataGen
 from model import Seq2SeqAttnNet
 
 HIDDEN_SIZE = 256
-def train(batch_size, data_path, save_path, resume_flag = False):
+def train(batch_size, max_sequence_length, data_path, save_path, resume_flag = False):
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 	datagen = DataGen(data_path = data_path, 
-			  batch_size = batch_size)
+			  batch_size = batch_size,
+			  max_seq_len = max_sequence_length)
 	datagen.init_data()
 
 	input_size = datagen.input_size		# Input vocab size
@@ -73,8 +74,8 @@ def train(batch_size, data_path, save_path, resume_flag = False):
 			loss.backward()		
 			encoder_opt.step()	
 			decoder_opt.step()
-			print('Step {} loss = {}'.format(step_idx, loss.item()))
-
+			# print("===> Step {} : Loss: {:.4f}".format(step_idx, 
+			#					   loss.item()))
 
 		print ("===> Epoch {} Complete: Avg. Training Loss: {:.4f}".format(epoch, 
 										   train_loss / train_steps))
@@ -94,10 +95,11 @@ def train(batch_size, data_path, save_path, resume_flag = False):
 		checkpoint(model, epoch, save_path)
 	torch.save(model, save_path)
 
-def test(save_path, data_path = None, weights_only = False):
+def test(save_path, max_sequence_length = 50, data_path = None, weights_only = False):
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	datagen = DataGen(data_path = data_path, 
-		  	 batch_size = batch_size)
+		  	 batch_size = batch_size,
+			 max_seq_len = max_sequence_length)
 
 	if not weights_only:
 		datagen.init_data(mode = 'test')
@@ -164,10 +166,12 @@ if __name__  == '__main__':
 			    choices = ['train', 'val', 'test'])
 	parser.add_argument('-b',
 			    '--batch_size',
+			    type = int,
 			    default = 32)
-	parser.add_argument('-c',
-			    '--count',
-			    default = 12)
+	parser.add_argument('-l',
+			    '--max_sequence_length',
+			    type = int,
+			    default = 50)
 	parser.add_argument('-d',
 			    '--data_path',
 			    default = 'rig-veda/sans_eng.txt')
@@ -178,11 +182,11 @@ if __name__  == '__main__':
 	arguments = parser.parse_args()
 	mode = arguments.exec_mode
 	batch_size = arguments.batch_size
-	count = arguments.count
+	max_sequence_length = arguments.max_sequence_length
 	data_path = arguments.data_path
 	save_path = arguments.save_path
 
 	if mode == 'train':
-		train(batch_size, data_path, save_path, resume_flag = False)
+		train(batch_size, max_sequence_length, data_path, save_path, resume_flag = False)
 	else:
-		test(save_path, data_path, weights_only = True)	
+		test(save_path, max_sequence_length, data_path, weights_only = True)	

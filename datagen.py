@@ -6,14 +6,13 @@ from collections import Counter
 
 import torch
 
-MAX_LENGTH = 50
-
 class DataGen(object):
 	def __init__(self,
 		     data_path = 'fra-eng/fra.txt',
 		     batch_size = 32, 
 		     ratio = 0.75,
-		     max_vocab_len = 5000,
+		     max_seq_len = 50,
+		     max_vocab_size = 5000,
 		     input_vocab_path = 'input_vocab.txt',
 		     target_vocab_path = 'target_vocab.txt'):
 		self.data_path = data_path
@@ -21,7 +20,8 @@ class DataGen(object):
 		self.target_vocab_path = target_vocab_path
 		self.batch_size = batch_size
 		self.ratio = ratio
-		self.max_vocab_len = max_vocab_len
+		self.max_seq_len = max_seq_len
+		self.max_vocab_size = max_vocab_size
 		
 		self.train_data = None
 		self.val_data = None
@@ -132,8 +132,8 @@ class DataGen(object):
 				target_text = self.tokenize(target_text)
 
 				source_sentence = ' '.join(input_text)
-				if len(input_text) > MAX_LENGTH or \
-				   len(target_text) > MAX_LENGTH - 1: # or \
+				if len(input_text) > self.max_seq_len or \
+				   len(target_text) > self.max_seq_len - 1: # or \
 				   #not source_sentence.startswith(select_prefixes):
 					continue
 
@@ -155,14 +155,14 @@ class DataGen(object):
 		else:
 			self.word2idx_source, self.idx2word_source = self.create_vocab(input_text_list, 
 										       start_index = 1,			# padding
-										       max_count = self.max_vocab_len - 1,
+										       max_count = self.max_vocab_size - 1,
 										       save_path = self.input_vocab_path)
 		if not update_vocab and os.path.exists(self.target_vocab_path):
 			self.word2idx_target, self.idx2word_target = self.load_vocab(self.input_vocab_path, start_index = 3)
 		else:
 			self.word2idx_target, self.idx2word_target = self.create_vocab(target_text_list, 
 										       start_index = 3,			# padding, SOS, EOS
-										       max_count = self.max_vocab_len - 3,
+										       max_count = self.max_vocab_size - 3,
 										       save_path = self.target_vocab_path)
 		
 		self.word2idx_target.update({self.SOS : 1, self.EOS : 2})
@@ -171,8 +171,8 @@ class DataGen(object):
 		self.input_size = len(self.word2idx_source) +  1
 		self.target_size = len(self.word2idx_target) + 1
 
-		self.input_length = min(MAX_LENGTH, max_input_length)
-		self.target_length = min(MAX_LENGTH, max_target_length + 1)	# 1 for SOS or EOS case	
+		self.input_length = min(self.max_seq_len, max_input_length)
+		self.target_length = min(self.max_seq_len, max_target_length + 1)	# 1 for SOS or EOS case	
 		self.train_data = [[], []]					# [Input text, target text]
 		self.val_data = [[], []]					# [Input text, target text]
 		

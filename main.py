@@ -126,14 +126,14 @@ def test(save_path, data_path = None, weights_only = False):
 	inp_text = datagen.tokenize(inp_text)
 	inp_text = datagen.encode_source_text(inp_text)
 
-	inp_text = torch.from_numpy(np.array([inp_text])).long()
+	inp_text = torch.tensor(np.array([inp_text]), dtype = torch.long, device = device)
 
 	encoder_out, hidden = model.encoder(inp_text)
 	
 	dec_word_list = []
 	attn_wts_list = []
 	prev_word = datagen.encode_target_text([datagen.SOS])
-	prev_word = torch.from_numpy(np.array([prev_word])).long()
+	prev_word = torch.tensor(np.array([prev_word]), dtype = torch.long, device = device)
 	
 	count = 0
 	dec_word = None
@@ -170,7 +170,7 @@ if __name__  == '__main__':
 			    default = 12)
 	parser.add_argument('-d',
 			    '--data_path',
-			    default = 'sans_eng.txt')
+			    default = 'rig-veda/sans_eng.txt')
 	parser.add_argument('-s',
 			    '--save_path',
 			    default = 'seq2seq_chk.pth')
@@ -183,6 +183,6 @@ if __name__  == '__main__':
 	save_path = arguments.save_path
 
 	if mode == 'train':
-		train(batch_size, data_path, save_path, resume_flag = True)
+		train(batch_size, data_path, save_path, resume_flag = False)
 	else:
 		test(save_path, data_path, weights_only = True)	

@@ -230,6 +230,8 @@ class DataGen(object):
 			decoder_inp_arr = np.array(self.pad(decoder_inp, fixed = True, maxlen = self.target_length))
 			y_arr = np.array(self.pad(y, fixed = True, maxlen = self.target_length))
 
-			yield [torch.from_numpy(x_arr).long(),
-			       torch.from_numpy(decoder_inp_arr).long(),
-			       torch.from_numpy(y_arr).long()]
+			device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+			yield [torch.tensor(x_arr, dtype = torch.long, device = device),
+			       torch.tensor(decoder_inp_arr, dtype = torch.long, device = device),
+			       torch.tensor(y_arr, dtype = torch.long, device = device)]

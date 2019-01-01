@@ -10,12 +10,13 @@ from datagen import DataGen
 from model import Seq2SeqAttnNet
 
 HIDDEN_SIZE = 256
-def train(batch_size, max_sequence_length, data_path, save_path, resume_flag = False):
+def train(batch_size, max_sequence_length, max_vocab_size, data_path, save_path, resume_flag = False):
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 	datagen = DataGen(data_path = data_path, 
 			  batch_size = batch_size,
-			  max_seq_len = max_sequence_length)
+			  max_seq_len = max_sequence_length,
+			  max_vocab_size = max_vocab_size)
 	datagen.init_data()
 
 	input_size = datagen.input_size		# Input vocab size
@@ -95,11 +96,12 @@ def train(batch_size, max_sequence_length, data_path, save_path, resume_flag = F
 		checkpoint(model, epoch, save_path)
 	torch.save(model, save_path)
 
-def test(save_path, max_sequence_length = 50, data_path = None, weights_only = False):
+def test(save_path, max_sequence_length = 50, max_vocab_size = 5000, data_path = None, weights_only = False):
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	datagen = DataGen(data_path = data_path, 
 		  	 batch_size = batch_size,
-			 max_seq_len = max_sequence_length)
+			 max_seq_len = max_sequence_length,
+			 max_vocab_size = max_vocab_size)
 
 	if not weights_only:
 		datagen.init_data(mode = 'test')
@@ -171,7 +173,13 @@ if __name__  == '__main__':
 	parser.add_argument('-l',
 			    '--max_sequence_length',
 			    type = int,
-			    default = 50)
+			    default = 50,
+			    help = 'Maximum length of sentence sequences')	
+	parser.add_argument('-v',
+			    '--max_vocab_size',
+			    type = int,
+			    default = 5000,
+			    help = 'Maximum size of individual vocabularies')
 	parser.add_argument('-d',
 			    '--data_path',
 			    default = 'rig-veda/sans_eng.txt')
@@ -183,10 +191,20 @@ if __name__  == '__main__':
 	mode = arguments.exec_mode
 	batch_size = arguments.batch_size
 	max_sequence_length = arguments.max_sequence_length
+	max_vocab_size = arguments.max_vocab_size
 	data_path = arguments.data_path
 	save_path = arguments.save_path
 
 	if mode == 'train':
-		train(batch_size, max_sequence_length, data_path, save_path, resume_flag = False)
+		train(batch_size, 
+		      max_sequence_length, 
+		      max_vocab_size, 
+		      data_path, 
+		      save_path, 
+		      resume_flag = False)
 	else:
-		test(save_path, max_sequence_length, data_path, weights_only = True)	
+		test(save_path, 
+		     max_sequence_length, 
+		     max_vocab_size, 
+		     data_path, 
+		     weights_only = True)	

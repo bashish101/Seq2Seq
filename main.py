@@ -9,24 +9,31 @@ import torch.optim as optim
 from datagen import DataGen
 from model import Seq2SeqAttnNet
 
+HIDDEN_SIZE = 256
 def train(batch_size, data_path, save_path, resume_flag = False):
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 	datagen = DataGen(data_path = data_path, 
 			  batch_size = batch_size)
-	datagen.load_data()
+	datagen.init_data()
 
 	input_size = datagen.input_size		# Input vocab size
-	hidden_size = 256
+	hidden_size = HIDDEN_SIZE
 	output_size = datagen.target_size	# Target vocab size
 	input_length = datagen.input_length
 	output_length = datagen.target_length
+
+	print('Input vocab size: ', input_size)
+	print('Target vocab size: ', output_size)
+	print('Input text length: ', input_length)
+	print('Target text length: ', output_length)
 
 	model = Seq2SeqAttnNet(input_size, 
 			       hidden_size, 
 			       output_size, 
 			       input_length, 
 			       output_length).to(device)
+
 	criterion = nn.NLLLoss()
 	encoder_opt = optim.Adamax(model.encoder.parameters())
 	decoder_opt = optim.Adamax(model.decoder.parameters())
@@ -43,8 +50,8 @@ def train(batch_size, data_path, save_path, resume_flag = False):
 	val_steps = datagen.val_size // batch_size
 	epochs = 1000
 
-	if resume_flag:
-		model.load_state_dict(torch.load(save_path))
+	if resume_flag and os.path.exists('seq2seq_chk.pth'):
+		model.load_state_dict(torch.load('seq2seq_chk.pth'))
 
 
 	train_datagen = datagen.get_batch(mode = 'train')
@@ -52,7 +59,7 @@ def train(batch_size, data_path, save_path, resume_flag = False):
 	for epoch in range(epochs):
 		train_loss = 0
 		model.set_mode('train')
-		for batch_idx in range(train_steps):
+		for step_idx in range(train_steps):
 			x, decoder_inp, y = next(train_datagen)
 
 			model.set_decoder_inp(decoder_inp)
@@ -66,7 +73,7 @@ def train(batch_size, data_path, save_path, resume_flag = False):
 			loss.backward()		
 			encoder_opt.step()	
 			decoder_opt.step()
-			print(loss.item())
+			print('Step {} loss = {}'.format(step_idx, loss.item()))
 
 
 		print ("===> Epoch {} Complete: Avg. Training Loss: {:.4f}".format(epoch, 
@@ -74,7 +81,7 @@ def train(batch_size, data_path, save_path, resume_flag = False):
 		val_loss = 0
 		model.set_mode('val')
 		with torch.no_grad():
-			for batch_idx in range(val_steps):
+			for step_idx in range(val_steps):
 				x, _, y = next(val_datagen)
 
 				pred, _ = model(x)
@@ -85,11 +92,67 @@ def train(batch_size, data_path, save_path, resume_flag = False):
 									  	     val_loss / val_steps))
 
 		checkpoint(model, epoch, save_path)
+	torch.save(model, save_path)
 
-def test(batch_size, data_path, save_path, count):
+def test(save_path, data_path = None, weights_only = False):
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-	pass
+	datagen = DataGen(data_path = data_path, 
+		  	 batch_size = batch_size)
+
+	if not weights_only:
+		datagen.init_data(mode = 'test')
+		model = torch.load(save_path)
+	else:
+		datagen.init_data()
+
+		input_size = datagen.input_size		# Input vocab size
+		hidden_size = HIDDEN_SIZE
+		output_size = datagen.target_size	# Target vocab size
+		input_length = datagen.input_length
+		output_length = datagen.target_length
+
+		model = Seq2SeqAttnNet(input_size, 
+				       hidden_size, 
+				       output_size, 
+				       input_length, 
+				       output_length).to(device)
+
+		model.load_state_dict(torch.load(save_path))
+
+
+	model.set_mode('test')	
+
+	inp_text = input('Enter text in english:')
+	inp_text = datagen.tokenize(inp_text)
+	inp_text = datagen.encode_source_text(inp_text)
+
+	inp_text = torch.from_numpy(np.array([inp_text])).long()
+
+	encoder_out, hidden = model.encoder(inp_text)
 	
+	dec_word_list = []
+	attn_wts_list = []
+	prev_word = datagen.encode_target_text([datagen.SOS])
+	prev_word = torch.from_numpy(np.array([prev_word])).long()
+	
+	count = 0
+	dec_word = None
+	while prev_word != datagen.word2idx_target[datagen.EOS] and count < output_length:
+		x, hidden, attn_wts = model.decoder(encoder_out, hidden, prev_word, False)
+
+		top_v, top_i = x.squeeze().topk(1)
+		prev_word = top_i
+		
+		attn_wts_list.append(attn_wts)	
+		dec_word_list.append(prev_word)
+
+		prev_word = prev_word.unsqueeze(1)
+		count += 1
+
+	out_text_enc = np.array([x for x in dec_word_list if x != 0])
+	out_text = datagen.decode_target_text(out_text_enc)
+	out_text = ' '.join(out_text)
+	print(out_text)
 	
 if __name__  == '__main__':
 	parser = argparse.ArgumentParser(description = 'Seq2SeqAttnNet Parameters')
@@ -98,7 +161,7 @@ if __name__  == '__main__':
 			    '--exec_mode',
 			    default = 'train',
 			    help = 'Execution mode',
-			    choices = ['train', 'test'])
+			    choices = ['train', 'val', 'test'])
 	parser.add_argument('-b',
 			    '--batch_size',
 			    default = 32)
@@ -107,7 +170,7 @@ if __name__  == '__main__':
 			    default = 12)
 	parser.add_argument('-d',
 			    '--data_path',
-			    default = 'fra-eng/fra.txt')
+			    default = 'sans_eng.txt')
 	parser.add_argument('-s',
 			    '--save_path',
 			    default = 'seq2seq_chk.pth')
@@ -122,4 +185,4 @@ if __name__  == '__main__':
 	if mode == 'train':
 		train(batch_size, data_path, save_path, resume_flag = True)
 	else:
-		test(batch_size, data_path, save_path, count)	
+		test(save_path, data_path, weights_only = True)	

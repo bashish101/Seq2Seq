@@ -1,3 +1,5 @@
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -50,7 +52,7 @@ class AttnDecoderModule(nn.Module):
 		self.attn_fc1 = nn.Linear(hidden_size * 2, hidden_size, bias = False)
 		self.attn_fc2 = nn.Linear(hidden_size, hidden_size, bias = False)
 
-		self.attn = nn.Linear(hidden_size * 2, max_input_length)
+		# self.attn = nn.Linear(hidden_size * 2, max_input_length)
 
 		self.attn_combine = nn.Linear(hidden_size * 2, hidden_size)
 
@@ -75,7 +77,7 @@ class AttnDecoderModule(nn.Module):
 		x = self.embedding(x)
 		x = self.dropout(x)
 
-		x_h = hidden.squeeze().unsqueeze(1)
+		x_h = hidden.permute(1, 0, 2)
 
 		wh = self.attn_fc1(torch.cat([x, x_h], 2))
 		attn_wts = F.softmax(self.attn_fc(wh + self.wenc), dim = 2)
@@ -93,11 +95,11 @@ class AttnDecoderModule(nn.Module):
 		x = F.log_softmax(self.out(x), dim = 2)
 		return x, hidden, attn_wts
 		
-	def forward(self, encoder_out, hidden = None, y = None, teacher_forcing = True, ratio = 0.5):
-		if hidden is  None:
+	def forward(self, encoder_out, hidden, y, teacher_forcing = True, ratio = 0.5):
+		if hidden is None:
 			hidden = self.init_hidden(encoder_out.shape)
 
-		if self.mode == 'train':
+		if self.mode in ['train', 'val']:
 			step_size = self.max_output_length
 		else:
 			step_size = 1
@@ -107,24 +109,24 @@ class AttnDecoderModule(nn.Module):
 		out = []
 		attn = []
 		for idx in range(step_size):
-			if teacher_forcing == False and np.random.rand() < ratio:
+			if teacher_forcing == True and np.random.rand() < ratio:
 				x = y[:, idx]
 			else:
 				x = x.detach()
-	
 
 			x = x.view(-1, 1)
 
 			x, hidden, attn_wts = self.step(x, hidden, encoder_out)
 
-			x = x.squeeze().unsqueeze(2)
+			x = x.permute(0, 2, 1)
 			out.append(x)
 			attn.append(attn_wts)
+
 			top_v, top_i = x.squeeze().topk(1)
 			x = top_i
 		
 		out = torch.cat(out, dim = 2)
-		attn = torch.cat(attn, dim = 0)
+		attn = torch.cat(attn, dim = 1)
 		return out, hidden, attn	
 		
 	def init_hidden(self, input_shape):
@@ -154,8 +156,9 @@ class Seq2SeqAttnNet(nn.Module):
 
 	def set_mode(self, mode):
 		self.mode = mode
-		if mode == 'test':
+		if self.mode != 'train':
 			self.teacher_forcing = False
+		self.decoder.set_mode(self.mode)
 
 	def set_decoder_inp(self, decoder_inp):
 		self.decoder_inp = decoder_inp
